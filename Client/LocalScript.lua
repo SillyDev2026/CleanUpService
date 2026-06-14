@@ -859,4 +859,3 @@ ToggleApply.PlayerCollision = function(v)
 	State.PlayerCollision = v
 	NetStream:FireToPlayer(player, 2, { collision = v })
 end
-

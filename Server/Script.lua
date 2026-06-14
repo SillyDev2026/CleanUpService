@@ -51,8 +51,6 @@ local function createBillboardForCharacter(player, character)
 	playerBillboards[player] = billboard
 end
 
-
-
 local NORMAL = "PlayerCharacters"
 local PASS = "PlayerPass"
 
