@@ -44,6 +44,7 @@ local function createBillboardForCharacter(player, character)
 	label.BackgroundTransparency = 1
 	label.TextColor3 = Color3.fromRGB(245, 245, 245)
 	label.TextScaled = true
+	label.RichText = true
 	label.Font = Enum.Font.SourceSansBold
 	label.Text = "FPS: -- | Ping: -- | Mem: --"
 	label.Parent = bg
