@@ -1,7 +1,7 @@
 --!native
 --!optimize 2
 
-local Promise = require(script.Promise)
+local Promise = require(script.Parent.Promise)
 
 -- Node stores a callback and its state
 type Node<T...> = {
