@@ -6,6 +6,7 @@ local EventBus = require(NetworkHandler.EventBus)
 local NetStream = EventBus.ReliableEvent()
 local serverId = game.JobId
 local region = game:GetService('LocalizationService').RobloxLocaleId or "Unknown"
+
 local servers = {}
 
 function publish()

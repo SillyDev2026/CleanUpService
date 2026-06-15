@@ -48,7 +48,6 @@ local function createBillboardForCharacter(player, character)
 	label.Font = Enum.Font.SourceSansBold
 	label.Text = "FPS: -- | Ping: -- | Mem: --"
 	label.Parent = bg
-
 	playerBillboards[player] = billboard
 end
 

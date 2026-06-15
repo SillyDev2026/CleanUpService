@@ -17,8 +17,8 @@ local NetStream = EventBus.ReliableEvent()
 local ToggleApply = {}
 local ServerCache = {}
 
-local player     = Players.LocalPlayer
-local playerGui  = player:WaitForChild("PlayerGui")
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
 
 local MAIN_COLOR = Color3.fromRGB(32, 32, 36)
 local HEADER_COLOR = Color3.fromRGB(26, 26, 30)
