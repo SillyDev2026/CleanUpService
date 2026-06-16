@@ -14,6 +14,8 @@ local NetworkHandler = ReplicatedStorage.NetworkHandler
 local EventBus = require(NetworkHandler.EventBus)
 local NetStream = EventBus.ReliableEvent()
 
+local RenderDistanceLabel, RenderDistanceBox
+
 local ToggleApply = {}
 local ServerCache = {}
 
@@ -28,6 +30,7 @@ local SUBTEXT_COLOR = Color3.fromRGB(170, 170, 175)
 local ACCENT_COLOR = Color3.fromRGB(0, 162, 255)
 local BORDER_COLOR = Color3.fromRGB(60, 60, 65)
 
+local FADE_BUFFER = 15
 local State = {
 	GlobalShadows = true,
 	VFX = true,
@@ -37,7 +40,10 @@ local State = {
 	AutoOptimize = true,
 	SmartFog = true,
 	PlayerVisibility = true,
-	PlayerCollision = true
+	PlayerCollision = true,
+	DynamicRender = false,
+	RenderDistance = 10,
+	OcclusionCulling = true,
 }
 
 local Presets = {
@@ -51,6 +57,7 @@ local Presets = {
 		SmartFog = true,
 		PlayerVisibility = true,
 		PlayerCollision = true,
+		OcclusionCulling = true,
 	},
 
 	Balanced = {
@@ -63,6 +70,7 @@ local Presets = {
 		SmartFog = true,
 		PlayerVisibility = true,
 		PlayerCollision = true,
+		OcclusionCulling = true,
 	},
 
 	High = {
@@ -75,6 +83,7 @@ local Presets = {
 		SmartFog = false,
 		PlayerVisibility = false,
 		PlayerCollision = false,
+		OcclusionCulling = false,
 	}
 }
 
@@ -434,9 +443,9 @@ local function createPresetButton(name, data)
 
 	btn.MouseButton1Click:Connect(function()
 		for k, v in pairs(data) do
-			if k ~= "PlayerCollision" then
-				State[k] = v
-				if ToggleApply[k] then ToggleApply[k](v) end
+			State[k] = v
+			if ToggleApply[k] then
+				ToggleApply[k](v)
 			end
 		end
 	end)
@@ -586,6 +595,72 @@ local function createToggle(key, labelText, descText)
 	end)
 end
 
+local function createRenderDistanceRow()
+	local row = Instance.new("Frame")
+	row.Size = UDim2.new(1, 0, 0, 40)
+	row.BackgroundTransparency = 1
+	row.LayoutOrder = #ToggleApply + 1
+	row.Parent = togglesPanel
+
+	local rowLayout = Instance.new("UIListLayout")
+	rowLayout.FillDirection = Enum.FillDirection.Horizontal
+	rowLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+	rowLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	rowLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	rowLayout.Parent = row
+
+	local label = Instance.new("TextLabel")
+	label.BackgroundTransparency = 1
+	label.Size = UDim2.new(0.45, 0, 1, 0)
+	label.Text = "Render Distance"
+	label.Font = Enum.Font.SourceSansBold
+	label.TextSize = 14
+	label.TextColor3 = TEXT_COLOR
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.Parent = row
+
+	local studsLabel = Instance.new("TextLabel")
+	studsLabel.BackgroundTransparency = 1
+	studsLabel.Size = UDim2.new(0.25, 0, 1, 0)
+	studsLabel.Text = State.RenderDistance .. " studs"
+	studsLabel.Font = Enum.Font.SourceSans
+	studsLabel.TextSize = 14
+	studsLabel.TextColor3 = SUBTEXT_COLOR
+	studsLabel.TextXAlignment = Enum.TextXAlignment.Left
+	studsLabel.Parent = row
+
+	local box = Instance.new("TextBox")
+	box.Size = UDim2.new(0.25, 0, 0.7, 0)
+	box.BackgroundColor3 = Color3.fromRGB(60, 60, 65)
+	box.BorderSizePixel = 0
+	box.Text = tostring(State.RenderDistance)
+	box.Font = Enum.Font.SourceSansBold
+	box.TextSize = 14
+	box.TextColor3 = TEXT_COLOR
+	box.ClearTextOnFocus = false
+	box.Parent = row
+	
+	RenderDistanceLabel = studsLabel
+	RenderDistanceBox = box
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 4)
+	corner.Parent = box
+
+	box.FocusLost:Connect(function()
+		local num = tonumber(box.Text)
+		if not num then
+			box.Text = tostring(State.RenderDistance)
+			return
+		end
+
+		num = math.clamp(num, 5, 2000)
+		State.RenderDistance = num
+		studsLabel.Text = num .. " studs"
+		box.Text = tostring(num)
+	end)
+end
+
 createToggle("GlobalShadows", "Global Shadows", "Toggle world shadow rendering.")
 createToggle("VFX", "VFX / Particles", "Scale particle density based on FPS.")
 createToggle("PartLOD", "Part Detail (LOD)", "Lower material quality at distance.")
@@ -595,6 +670,10 @@ createToggle("AutoOptimize", "Auto Optimize", "Auto adjust shadows & fog.")
 createToggle("SmartFog", "Smart Fog", "Fog tuning based on FPS.")
 createToggle("PlayerVisibility", "Player Visibility", "Hide all other players on your screen.")
 createToggle("PlayerCollision", "Player Collision", "Walk through other players.")
+createToggle("DynamicRender", "Dynamic Render Scaling", "Auto-adjust render distance based on FPS.")
+createToggle("OcclusionCulling", "Occlusion Culling", "Hide objects fully blocked by walls.")
+
+createRenderDistanceRow()
 
 createPresetButton("Ultra Low", Presets.UltraLow)
 createPresetButton("Balanced", Presets.Balanced)
@@ -853,7 +932,7 @@ local function applyMaterialLOD(part, dist)
 		return
 	end
 
-	if dist > 200 then
+	if dist > State.RenderDistance then
 		if not part:GetAttribute("OriginalMaterial") then
 			part:SetAttribute("OriginalMaterial", part.Material)
 		end
@@ -909,7 +988,99 @@ local function applySmartFog(fps)
 	end
 end
 
-RunService.Heartbeat:Connect(function()
+local function isPlayerPart(part)
+	local character = part:FindFirstAncestorOfClass('Model')
+	if character then
+		return Players:GetPlayerFromCharacter(character) ~= nil
+	end
+	return false
+end
+
+local fadeCache = {}
+
+local function fadePart(part, target, duration)
+	duration = duration or 0.35
+	if fadeCache[part] then
+		fadeCache[part]:Cancel()
+	end
+
+	local tween = TweenService:Create(
+		part,
+		TweenInfo.new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+		{ LocalTransparencyModifier = target, Size = part.Size * 0.8 }
+	)
+
+	fadeCache[part] = tween
+	tween:Play()
+
+	tween.Completed:Connect(function()
+		if fadeCache[part] == tween then
+			fadeCache[part] = nil
+		end
+	end)
+end
+
+local function fadeChildren(part, target)
+	for _, obj in ipairs(part:GetDescendants()) do
+		if obj:IsA("Decal") or obj:IsA("Texture") then
+			obj.Transparency = target
+		elseif obj:IsA("Beam") or obj:IsA("Trail") then
+			obj.Enabled = (target == 0)
+		end
+	end
+end
+
+local MAX_OCCLUSION_CHECKS_PER_FRAME = 40
+local occlusionIndex = 1
+local occlusionState = {}
+
+local function getRootForComparison(hit)
+	if not hit then return nil end
+	local model = hit:FindFirstAncestorOfClass("Model")
+	return model or hit
+end
+
+local function isOccluded(camPos, part)
+	local dist = (part.Position - camPos).Magnitude
+	if dist > (State.RenderDistance + FADE_BUFFER) then
+		return false, dist
+	end
+
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = {Players.LocalPlayer.Character}
+
+	local dir = (part.Position - camPos)
+	local result = Workspace:Raycast(camPos, dir, params)
+	if not result then
+		return false, dist
+	end
+
+	local hitRoot = getRootForComparison(result.Instance)
+	local partRoot = getRootForComparison(part)
+
+	if hitRoot and partRoot and hitRoot ~= partRoot then
+		return true, dist
+	end
+
+	return false, dist
+end
+
+local function setOcclusionVisible(part, visible)
+	local current = occlusionState[part]
+	if current == visible then return end
+	occlusionState[part] = visible
+
+	if visible then
+		fadePart(part, 0)
+		fadeChildren(part, 0)
+	else
+		fadePart(part, 1)
+		fadeChildren(part, 1)
+	end
+end
+
+RunService.Heartbeat:Connect(function(dt)
 	local cam = Workspace.CurrentCamera
 	if not cam then return end
 
@@ -917,8 +1088,16 @@ RunService.Heartbeat:Connect(function()
 
 	for i = #Registry.Parts, 1, -1 do
 		local p = Registry.Parts[i]
+
 		if p and p.Parent then
-			local dist = (p.Position - camPos).Magnitude
+			if isPlayerPart(p) then
+				continue
+			end
+
+			local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+			local origin = root and root.Position or camPos
+			local dist = (p.Position - origin).Magnitude
+
 			applyMaterialLOD(p, dist)
 
 			if State.PhysicsSleep and not p.Anchored then
@@ -932,6 +1111,29 @@ RunService.Heartbeat:Connect(function()
 					end
 				end
 			end
+
+			if State.RenderDistance then
+				local fadeStart = State.RenderDistance
+				local fadeEnd = State.RenderDistance + FADE_BUFFER
+
+				if dist <= fadeStart then
+					p:SetAttribute("WasVisible", nil)
+					fadePart(p, 0)
+					fadeChildren(p, 0)
+
+				elseif dist >= fadeEnd then
+					p:SetAttribute("WasVisible", true)
+					fadePart(p, 1)
+					fadeChildren(p, 1)
+
+				else
+					local alpha = math.clamp((dist - fadeStart) / (fadeEnd - fadeStart), 0, 1)
+					fadePart(p, alpha)
+					fadeChildren(p, alpha)
+					p:SetAttribute("WasVisible", alpha > 0)
+				end
+			end
+
 		else
 			table.remove(Registry.Parts, i)
 		end
@@ -958,6 +1160,50 @@ RunService.Heartbeat:Connect(function()
 			end
 		end
 	end
+
+	if State.OcclusionCulling then
+		local parts = Registry.Parts
+		local total = #parts
+
+		if total > 0 then
+			local checks = 0
+
+			while checks < MAX_OCCLUSION_CHECKS_PER_FRAME do
+				if occlusionIndex > total then
+					occlusionIndex = 1
+				end
+
+				local part = parts[occlusionIndex]
+				occlusionIndex += 1
+				checks += 1
+
+				if part and part.Parent and part:IsA("BasePart") and not isPlayerPart(part) then
+					local occluded = false
+					local ok, result = pcall(function()
+						local hit, _ = isOccluded(camPos, part)
+						return hit
+					end)
+
+					if ok then
+						occluded = result
+					end
+
+					setOcclusionVisible(part, not occluded)
+				end
+
+				if occlusionIndex > total then
+					break
+				end
+			end
+		end
+	else
+		for part in pairs(occlusionState) do
+			if part and part.Parent then
+				setOcclusionVisible(part, true)
+			end
+		end
+		table.clear(occlusionState)
+	end
 end)
 
 local frameCount = 0
@@ -970,6 +1216,21 @@ RunService.RenderStepped:Connect(function()
 	if now - lastUpdate >= 1 then
 		local fps = math.floor(frameCount / (now - lastUpdate))
 		fpsVal.Text = tostring(fps)
+		
+		if State.DynamicRender then
+			if fps < 35 then
+				State.RenderDistance = math.max(5, State.RenderDistance - 1)
+			elseif fps > 55 then
+				State.RenderDistance = math.min(2000, State.RenderDistance + 1)
+			end
+			if RenderDistanceLabel then
+				RenderDistanceLabel.Text = State.RenderDistance .. ' studs'
+			end
+			if RenderDistanceBox then
+				RenderDistanceBox.Text = tostring(State.RenderDistance)
+			end
+		end
+
 		table.insert(fpsHistory, fps)
 		if #fpsHistory > FPS_HISTORY_LENGTH then
 			table.remove(fpsHistory, 1)
@@ -997,7 +1258,6 @@ RunService.RenderStepped:Connect(function()
 		for _, v in ipairs(Registry.VFX) do
 			scaleEmitter(v, fps)
 		end
-		
 		
 		NetStream:FireToPlayer(player, 1, {
 			fps = fps,
@@ -1066,6 +1326,10 @@ end)
 ToggleApply.PlayerCollision = function(v)
 	State.PlayerCollision = v
 	NetStream:FireToPlayer(player, 2, { collision = v })
+end
+
+ToggleApply.OcclusionCulling = function(v)
+	State.OcclusionCulling = v
 end
 
 local AUTO_REFRESH = 10

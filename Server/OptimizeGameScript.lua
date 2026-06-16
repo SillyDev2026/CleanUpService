@@ -22,7 +22,7 @@ local function createBillboardForCharacter(player, character)
 	billboard.Size = UDim2.new(0, 220, 0, 60)
 	billboard.StudsOffset = Vector3.new(0, 3, 0)
 	billboard.AlwaysOnTop = true
-	billboard.MaxDistance = 200
+	billboard.MaxDistance = 60
 	billboard.Parent = character
 
 	local bg = Instance.new("Frame")
