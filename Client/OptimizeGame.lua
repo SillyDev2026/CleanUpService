@@ -31,20 +31,29 @@ local ACCENT_COLOR = Color3.fromRGB(0, 162, 255)
 local BORDER_COLOR = Color3.fromRGB(60, 60, 65)
 
 local FADE_BUFFER = 15
-local State = {
-	GlobalShadows = true,
-	VFX = true,
-	PartLOD = true,
-	SoundDistance = true,
-	PhysicsSleep = false,
-	AutoOptimize = true,
-	SmartFog = true,
-	PlayerVisibility = true,
-	PlayerCollision = true,
-	DynamicRender = false,
-	RenderDistance = 10,
-	OcclusionCulling = true,
-}
+
+local State = {}
+
+NetStream:FireToPlayer(player, 6)
+
+NetStream:Connect(8, function(player, saved)
+	for k, v in pairs(saved) do
+		State[k] = v
+	end
+	for key, applyFn in ipairs(ToggleApply) do
+		if State[key] ~= nil then
+			applyFn(State[key])
+		end
+	end
+	if RenderDistanceLabel then
+		RenderDistanceLabel.Text = State.RenderDistance .. ' studs'
+	end
+	if RenderDistanceBox then
+		RenderDistanceBox.Text = tostring(State.RenderDistance)
+	end
+end)
+
+task.wait(4)
 
 local Presets = {
 	UltraLow = {
@@ -386,7 +395,6 @@ local function updateFPSGraph()
 	end
 end
 
-
 local presetPanel = Instance.new("Frame")
 presetPanel.Size = UDim2.new(1, 0, 0, 40)
 presetPanel.BackgroundColor3 = PANEL_COLOR
@@ -448,6 +456,7 @@ local function createPresetButton(name, data)
 				ToggleApply[k](v)
 			end
 		end
+		NetStream:FireToPlayer(player, 7, State)
 	end)
 end
 
@@ -592,6 +601,7 @@ local function createToggle(key, labelText, descText)
 				ToggleApply.PlayerVisibility(State[key])
 			end
 		end
+		NetStream:FireToPlayer(player, 7, State)
 	end)
 end
 
@@ -658,6 +668,7 @@ local function createRenderDistanceRow()
 		State.RenderDistance = num
 		studsLabel.Text = num .. " studs"
 		box.Text = tostring(num)
+		NetStream:FireToPlayer(player, 7, State)
 	end)
 end
 
@@ -1007,7 +1018,7 @@ local function fadePart(part, target, duration)
 	local tween = TweenService:Create(
 		part,
 		TweenInfo.new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-		{ LocalTransparencyModifier = target, Size = part.Size * 0.8 }
+		{ LocalTransparencyModifier = target }
 	)
 
 	fadeCache[part] = tween
