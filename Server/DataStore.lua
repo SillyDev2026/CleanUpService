@@ -24,6 +24,7 @@ local EventBus = require(NetworkHandler.EventBus)
 local NetStream = EventBus.ReliableEvent()
 
 NetStream:Connect(7, function(player, newState)
+    if typeof(newState) ~= "table" then return end
 	OptimizeStore:SaveBuffered(player.UserId, newState)
 end)
 
@@ -32,6 +33,11 @@ NetStream:Connect(6, function(player)
 	NetStream:FireToPlayer(player, 8, saved)
 end)
 
+Players.PlayerRemoving:Connect(function(player)
+    OptimizeStore:Flush(player.UserId)
+end)
+
 game:BindToClose(function()
-	task.wait(2)
+    local completed = OptimizeStore:FlushAll(20)
+    if not completed then warn("OptimizeStore shutdown flush exceeded timeout") end
 end)

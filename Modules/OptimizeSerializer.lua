@@ -1,3 +1,4 @@
+--!strict
 --!native
 --!optimize 2
 
@@ -19,7 +20,13 @@ local ORDER = {
 
 local TOTAL_BYTES = 15
 
-function Serializer.Encode(state)
+local function validU16(value: any, name: string): number
+    assert(type(value) == "number" and value == value and value >= 0 and value <= 65535
+        and value % 1 == 0, name .. " must be a uint16 integer")
+    return value
+end
+
+function Serializer.Encode(state: {[string]: any}): buffer
 	local buf = buffer.create(TOTAL_BYTES)
 	local offset = 0
 
@@ -28,15 +35,15 @@ function Serializer.Encode(state)
 		offset += 1
 	end
 
-	buffer.writeu16(buf, offset, state.RenderDistance)
+	buffer.writeu16(buf, offset, validU16(state.RenderDistance, "RenderDistance"))
 	offset += 2
 
-	buffer.writeu16(buf, offset, state.RenderFPS)
+	buffer.writeu16(buf, offset, validU16(state.RenderFPS, "RenderFPS"))
 
 	return buf
 end
 
-function Serializer.Decode(buf, defaults)
+function Serializer.Decode(buf: buffer?, defaults: {[string]: any}): {[string]: any}
 	if not buf or buffer.len(buf) < TOTAL_BYTES then
 		return table.clone(defaults)
 	end
